@@ -69,3 +69,5 @@ def handle(raw: str) -> str:
 for raw in MODEL_OUTPUTS:
     result = handle(raw)
     print(f"Input: {raw}\nOutput: {result}\n")
+
+    
