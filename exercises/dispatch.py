@@ -45,11 +45,11 @@ def dispatch(name: str, args: dict) -> str:
 
 
 MODEL_OUTPUTS = [  
-    '{"tool": "add", "args": {"a": 2, "b": 3}}'
-    '{"tool": "get_time", "args": {}}'
-    '{"tool": "lookup", "args": {"key": "Bob"}}'
-    '{"tool": "multiply", "args": {"a": 2, "b": 3}}'
-    '{"tool": "add", "args": {"a": 2}}'
+    '{"tool": "add", "args": {"a": 2, "b": 3}}',
+    '{"tool": "get_time", "args": {}}',
+    '{"tool": "lookup", "args": {"key": "Bob"}}',
+    '{"tool": "multiply", "args": {"a": 2, "b": 3}}',
+    '{"tool": "add", "args": {"a": 2}}',
     '{"tool": "add", "args": {"a": 2, "b": 3}' 
 ]
 
@@ -70,4 +70,3 @@ for raw in MODEL_OUTPUTS:
     result = handle(raw)
     print(f"Input: {raw}\nOutput: {result}\n")
 
-    
