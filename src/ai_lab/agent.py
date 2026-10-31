@@ -3,9 +3,15 @@
 Run:
     uv run python -m ai_lab.agent             # demo question (needs 3 tool calls)
     uv run python -m ai_lab.agent selftest    # bad-call handling checks, no model needed
+
+Every run_agent() call appends one line to runs/YYYY-MM-DD.jsonl (pass log=False to skip).
 """
 import json
 import sys
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
 
 import ollama
 
@@ -13,6 +19,23 @@ from ai_lab.tools import TOOLS, TOOL_FUNCTIONS
 
 MODEL = "qwen3:8b"
 MAX_STEPS = 6  # one step = one model call
+
+# agent.py is at src/ai_lab/agent.py, so parents[2] is the repo root
+RUNS_DIR = Path(__file__).resolve().parents[2] / "runs"
+
+
+def log_run(run: dict, runs_dir: Path = RUNS_DIR) -> Path:
+    """Append one run as a single JSON line to runs/YYYY-MM-DD.jsonl. Returns the file path.
+
+    JSONL = one JSON object per line. Appending never rewrites earlier runs, and the file
+    loads straight into pandas later: pd.read_json(path, lines=True).
+    """
+    runs_dir.mkdir(exist_ok=True)
+    path = runs_dir / f"{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+    with path.open("a", encoding="utf-8") as f:
+        # default=str: anything json can't serialise (odd arg types from the model) is stored as text
+        f.write(json.dumps(run, ensure_ascii=False, default=str) + "\n")
+    return path
 
 SYSTEM_PROMPT = (
     "You are an agent that answers questions using tools. "
@@ -58,17 +81,40 @@ def execute_tool_call(name: str, args) -> tuple[str, bool]:
         return f"ERROR: {name} failed: {type(e).__name__}: {e}", False
 
 
-def run_agent(question: str, model: str = MODEL, max_steps: int = MAX_STEPS, verbose: bool = True) -> dict:
-    """Run the loop for one question. Returns a plain dict (ready to log as one JSONL line later)."""
+def run_agent(question: str, model: str = MODEL, max_steps: int = MAX_STEPS,
+              verbose: bool = True, log: bool = True, task_id: str | None = None) -> dict:
+    """Run the loop for one question. Returns a plain dict and, if log=True, appends it to runs/*.jsonl.
+
+    task_id is for the eval next week: pass the eval task's id so each logged run maps back to its task.
+    """
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
     tool_log = []
+    started_at = datetime.now().astimezone()
+    t0 = time.perf_counter()
 
     def result(outcome: str, answer, steps: int) -> dict:
-        return {"question": question, "model": model, "outcome": outcome,
-                "answer": answer, "steps": steps, "tool_calls": tool_log}
+        run = {
+            "run_id": uuid.uuid4().hex[:12],
+            "timestamp": started_at.isoformat(timespec="seconds"),
+            "task_id": task_id,
+            "model": model,
+            "max_steps": max_steps,
+            "question": question,
+            "outcome": outcome,          # answered | empty_answer | step_limit
+            "answer": answer,
+            "steps": steps,
+            "tool_calls": tool_log,
+            "bad_calls": sum(1 for t in tool_log if not t["ok"]),
+            "duration_s": round(time.perf_counter() - t0, 2),
+        }
+        if log:
+            path = log_run(run)
+            if verbose:
+                print(f"[logged] {path.parent.name}/{path.name}  run_id={run['run_id']}")
+        return run
 
     for step in range(1, max_steps + 1):
         try:
@@ -140,7 +186,8 @@ def main() -> None:
                 "what is the total yearly cost of the new engineers?")
     print(f"Q: {question}\n")
     run = run_agent(question)
-    print(f"\nOutcome: {run['outcome']} in {run['steps']} step(s), {len(run['tool_calls'])} tool call(s)")
+    print(f"\nOutcome: {run['outcome']} in {run['steps']} step(s), {len(run['tool_calls'])} tool call(s), "
+          f"{run['duration_s']}s")
     print(f"Answer: {run['answer']}")
 
 
