@@ -82,7 +82,8 @@ def execute_tool_call(name: str, args) -> tuple[str, bool]:
 
 
 def run_agent(question: str, model: str = MODEL, max_steps: int = MAX_STEPS,
-              verbose: bool = True, log: bool = True, task_id: str | None = None) -> dict:
+              verbose: bool = True, log: bool = True, task_id: str | None = None,
+              options: dict | None = None) -> dict:
     """Run the loop for one question. Returns a plain dict and, if log=True, appends it to runs/*.jsonl.
 
     task_id is for the eval next week: pass the eval task's id so each logged run maps back to its task.
@@ -109,6 +110,7 @@ def run_agent(question: str, model: str = MODEL, max_steps: int = MAX_STEPS,
             "tool_calls": tool_log,
             "bad_calls": sum(1 for t in tool_log if not t["ok"]),
             "duration_s": round(time.perf_counter() - t0, 2),
+            "options": options, 
         }
         if log:
             path = log_run(run)
@@ -118,7 +120,9 @@ def run_agent(question: str, model: str = MODEL, max_steps: int = MAX_STEPS,
 
     for step in range(1, max_steps + 1):
         try:
-            response = ollama.chat(model=model, messages=messages, tools=TOOLS, think=False)
+            response = ollama.chat(model=model, 
+                                   messages=messages, 
+                                   tools=TOOLS, think=False, options=options)
         except ollama.ResponseError as e:
             # Ollama couldn't parse the model's tool-call output. Tell the model and spend the step.
             if verbose:
