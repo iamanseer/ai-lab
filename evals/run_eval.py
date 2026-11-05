@@ -32,9 +32,13 @@ REFUSE_PHRASES = (
     "not available", "don't have", "do not have", "don't know", "cannot", "can't",
     "unable", "not allowed", "only select", "read-only", "not found", "no such",
     "does not exist", "doesn't exist", "couldn't find", "could not find", "no email",
+    "not be found",   # "could not be found" / "cannot be found"
 )
 
-NUM = re.compile(r"-?\d+(?:\.\d+)?")
+NUM = re.compile(r"(?<!\d)-?\d+(?:\.\d+)?")  # (?<!\d): "3-4" is a range, not 3 and -4
+# Dates are never an expected answer here, and "2023-10-01" would otherwise yield a stray 10
+# (a lucky pass on t14) or -10. Remove them before pulling numbers out.
+DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
 
 def load_tasks(path: Path = TASKS_PATH) -> list[dict]:
@@ -47,7 +51,8 @@ def load_tasks(path: Path = TASKS_PATH) -> list[dict]:
 
 def extract_numbers(text: str) -> list[float]:
     """Every number in the text. Commas are removed first, so 348,000 and 3,48,000 both work."""
-    return [float(n) for n in NUM.findall(text.replace(",", ""))]
+    text = DATE.sub(" ", text).replace(",", "")
+    return [float(n) for n in NUM.findall(text)]
 
 
 def grade(task: dict, run: dict) -> tuple[bool, str]:
